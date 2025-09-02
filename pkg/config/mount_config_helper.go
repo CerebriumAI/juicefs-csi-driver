@@ -28,57 +28,49 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/k8sclient"
 )
 
-const (
-	DaemonSetConfigMapName = "juicefs-daemonset-config"
-	DefaultConfigKey       = "default"
-)
+// Helper functions for DaemonSet node affinity configuration
+// The main MountConfig struct is defined in mount_config.go
 
-// DaemonSetConfig represents the configuration for a DaemonSet deployment
-type DaemonSetConfig struct {
-	Enabled      *bool                `yaml:"enabled,omitempty"`     // Explicitly enable/disable DaemonSet for this StorageClass
-	NodeAffinity *corev1.NodeAffinity `yaml:"nodeAffinity,omitempty"`
-}
-
-// GetDaemonSetConfig retrieves the DaemonSet configuration for a given StorageClass
+// GetDaemonSetNodeAffinity retrieves the DaemonSet node affinity configuration for a given StorageClass
 // It first checks for a StorageClass-specific configuration, then falls back to default
-func GetDaemonSetConfig(ctx context.Context, client *k8sclient.K8sClient, storageClassName string) (*corev1.NodeAffinity, error) {
-	log := klog.NewKlogr().WithName("daemonset-config")
+func GetDaemonSetNodeAffinity(ctx context.Context, client *k8sclient.K8sClient, storageClassName string) (*corev1.NodeAffinity, error) {
+	log := klog.NewKlogr().WithName("mount-config")
 	
 	// Try to get the ConfigMap
-	configMap, err := client.GetConfigMap(ctx, DaemonSetConfigMapName, Namespace)
+	configMap, err := client.GetConfigMap(ctx, MountConfigMapName, Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			log.V(1).Info("DaemonSet ConfigMap not found, using no node affinity", 
-				"configMap", DaemonSetConfigMapName, "namespace", Namespace)
+			log.V(1).Info("Mount ConfigMap not found, using no node affinity", 
+				"configMap", MountConfigMapName, "namespace", Namespace)
 			return nil, nil // No ConfigMap means no node affinity restrictions
 		}
-		return nil, fmt.Errorf("failed to get DaemonSet ConfigMap: %v", err)
+		return nil, fmt.Errorf("failed to get Mount ConfigMap: %v", err)
 	}
 
 	// Try to get StorageClass-specific configuration
 	if configData, exists := configMap.Data[storageClassName]; exists {
-		log.V(1).Info("Found StorageClass-specific DaemonSet configuration", 
+		log.V(1).Info("Found StorageClass-specific mount configuration", 
 			"storageClass", storageClassName)
-		return parseDaemonSetConfig(configData)
+		return parseDaemonSetNodeAffinity(configData)
 	}
 
 	// Fall back to default configuration
 	if configData, exists := configMap.Data[DefaultConfigKey]; exists {
-		log.V(1).Info("Using default DaemonSet configuration for StorageClass", 
+		log.V(1).Info("Using default mount configuration for StorageClass", 
 			"storageClass", storageClassName)
-		return parseDaemonSetConfig(configData)
+		return parseDaemonSetNodeAffinity(configData)
 	}
 
-	log.V(1).Info("No DaemonSet configuration found for StorageClass", 
+	log.V(1).Info("No mount configuration found for StorageClass", 
 		"storageClass", storageClassName)
 	return nil, nil
 }
 
-// parseDaemonSetConfig parses the configuration string into a NodeAffinity
-func parseDaemonSetConfig(configData string) (*corev1.NodeAffinity, error) {
-	config := &DaemonSetConfig{}
+// parseDaemonSetNodeAffinity parses the configuration string to extract NodeAffinity
+func parseDaemonSetNodeAffinity(configData string) (*corev1.NodeAffinity, error) {
+	config := &MountConfig{}
 	if err := yaml.Unmarshal([]byte(configData), config); err != nil {
-		return nil, fmt.Errorf("failed to parse DaemonSet configuration: %v", err)
+		return nil, fmt.Errorf("failed to parse mount configuration: %v", err)
 	}
 	return config.NodeAffinity, nil
 }
@@ -86,7 +78,7 @@ func parseDaemonSetConfig(configData string) (*corev1.NodeAffinity, error) {
 // LoadDaemonSetNodeAffinity loads node affinity for a StorageClass from ConfigMap
 // This is called when creating or updating a DaemonSet for mount pods
 func LoadDaemonSetNodeAffinity(ctx context.Context, client *k8sclient.K8sClient, jfsSetting *JfsSetting) error {
-	log := klog.NewKlogr().WithName("daemonset-config")
+	log := klog.NewKlogr().WithName("mount-config")
 	
 	// Skip if not using DaemonSet deployment
 	if !StorageClassShareMount || !StorageClassDaemonSet {
@@ -109,7 +101,7 @@ func LoadDaemonSetNodeAffinity(ctx context.Context, client *k8sclient.K8sClient,
 		storageClassName = jfsSetting.UniqueId
 	}
 
-	nodeAffinity, err := GetDaemonSetConfig(ctx, client, storageClassName)
+	nodeAffinity, err := GetDaemonSetNodeAffinity(ctx, client, storageClassName)
 	if err != nil {
 		log.Error(err, "Failed to get DaemonSet configuration", 
 			"storageClass", storageClassName)

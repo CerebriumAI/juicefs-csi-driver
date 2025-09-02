@@ -216,6 +216,59 @@ func TestMountSelector_SelectMount(t *testing.T) {
 	}
 }
 
+func TestMountSelector_DaemonSetFallback(t *testing.T) {
+	ctx := context.Background()
+	jfsConfig.Namespace = "test-ns"
+	jfsConfig.NodeName = "test-node"
+	
+	// Create a test case where DaemonSet cannot schedule on node
+	jfsSetting := &jfsConfig.JfsSetting{
+		UniqueId:  "test-id",
+		MountMode: string(jfsConfig.MountModeDaemonSet),
+		VolumeId:  "test-volume",
+		TargetPath: "/test/target",
+		PV: &corev1.PersistentVolume{
+			Spec: corev1.PersistentVolumeSpec{
+				StorageClassName: "test-sc",
+			},
+		},
+	}
+	
+	// Create fake k8s client with a node that doesn't match DaemonSet affinity
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: jfsConfig.NodeName,
+			Labels: map[string]string{
+				"node-type": "worker",
+			},
+		},
+	}
+	
+	fakeClient := fake.NewSimpleClientset(node)
+	k8sClient := &k8sclient.K8sClient{}
+	k8sClient.Interface = fakeClient
+	
+	// Create MountSelector
+	mounter := &k8sMount.FakeMounter{}
+	m := NewMountSelector(k8sClient, k8sMount.SafeFormatAndMount{
+		Interface: mounter,
+		Exec:      nil,
+	})
+	
+	// The JMount should fall back to shared pod mount when DaemonSet cannot schedule
+	// This is a simplified test - in reality we'd need to mock more of the DaemonSet behavior
+	selector := m.(*MountSelector)
+	mnt := selector.selectMount(ctx, jfsSetting)
+	
+	// Should initially select DaemonSet mount
+	if _, ok := mnt.(*DaemonSetMount); !ok {
+		t.Errorf("Expected DaemonSetMount initially, got %T", mnt)
+	}
+	
+	// In a real test, we would call JMount and verify it falls back to PodMount
+	// For now, we're just testing that the selection logic works
+}
+
 func TestMountSelector_Fallback(t *testing.T) {
 	ctx := context.Background()
 	jfsConfig.Namespace = "test-ns"

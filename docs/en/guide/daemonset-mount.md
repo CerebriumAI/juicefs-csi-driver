@@ -38,7 +38,7 @@ Create a ConfigMap to define node affinity for your StorageClasses without modif
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: juicefs-daemonset-config
+  name: juicefs-mount-config
   namespace: kube-system
 data:
   # Default configuration for all StorageClasses

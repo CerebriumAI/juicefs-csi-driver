@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 	
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -36,6 +37,23 @@ import (
 	"github.com/juicedata/juicefs-csi-driver/pkg/util"
 	"github.com/juicedata/juicefs-csi-driver/pkg/util/resource"
 )
+
+// DaemonSetSchedulingError indicates that a DaemonSet cannot schedule on a specific node
+type DaemonSetSchedulingError struct {
+	DaemonSetName string
+	NodeName      string
+	Message       string
+}
+
+func (e *DaemonSetSchedulingError) Error() string {
+	return e.Message
+}
+
+// IsDaemonSetSchedulingError checks if the error is a DaemonSet scheduling error
+func IsDaemonSetSchedulingError(err error) bool {
+	_, ok := err.(*DaemonSetSchedulingError)
+	return ok
+}
 
 type DaemonSetMount struct {
 	log klog.Logger
@@ -294,6 +312,25 @@ func (d *DaemonSetMount) createOrUpdateDaemonSet(ctx context.Context, dsName str
 func (d *DaemonSetMount) waitUntilDaemonSetReady(ctx context.Context, dsName string, jfsSetting *jfsConfig.JfsSetting) error {
 	log := util.GenLog(ctx, d.log, "waitUntilDaemonSetReady")
 	
+	// First, check if the DaemonSet can schedule a pod on this node
+	canSchedule, err := d.canScheduleOnNode(ctx, dsName)
+	if err != nil {
+		log.Error(err, "Failed to check if DaemonSet can schedule on node")
+		// Continue anyway, might be a transient error
+	}
+	
+	if !canSchedule {
+		// DaemonSet cannot schedule on this node due to nodeAffinity
+		// Return a specific error that can be handled by the caller
+		log.Info("DaemonSet cannot schedule on this node due to nodeAffinity, need fallback", 
+			"dsName", dsName, "nodeName", jfsConfig.NodeName)
+		return &DaemonSetSchedulingError{
+			DaemonSetName: dsName,
+			NodeName:      jfsConfig.NodeName,
+			Message:       "DaemonSet cannot schedule on this node due to nodeAffinity restrictions",
+		}
+	}
+	
 	// Wait for DaemonSet to have pods ready on current node
 	timeout := 5 * time.Minute
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -302,7 +339,12 @@ func (d *DaemonSetMount) waitUntilDaemonSetReady(ctx context.Context, dsName str
 	for {
 		select {
 		case <-waitCtx.Done():
-			return fmt.Errorf("timeout waiting for DaemonSet %s to be ready on node %s", dsName, jfsConfig.NodeName)
+			// Timeout - could be because pod cannot be scheduled on this node
+			return &DaemonSetSchedulingError{
+				DaemonSetName: dsName,
+				NodeName:      jfsConfig.NodeName,
+				Message:       fmt.Sprintf("timeout waiting for DaemonSet pod to be ready on node %s", jfsConfig.NodeName),
+			}
 		default:
 			ds, err := d.K8sClient.GetDaemonSet(waitCtx, dsName, jfsConfig.Namespace)
 			if err != nil {
@@ -416,4 +458,145 @@ func (d *DaemonSetMount) getDaemonSetNameFromTarget(ctx context.Context, target 
 	}
 	
 	return ""
+}
+
+// canScheduleOnNode checks if a DaemonSet can schedule a pod on the current node
+func (d *DaemonSetMount) canScheduleOnNode(ctx context.Context, dsName string) (bool, error) {
+	log := util.GenLog(ctx, d.log, "canScheduleOnNode")
+	
+	// Get the DaemonSet
+	ds, err := d.K8sClient.GetDaemonSet(ctx, dsName, jfsConfig.Namespace)
+	if err != nil {
+		return false, err
+	}
+	
+	// Get the current node
+	node, err := d.K8sClient.GetNode(ctx, jfsConfig.NodeName)
+	if err != nil {
+		log.Error(err, "Failed to get node", "nodeName", jfsConfig.NodeName)
+		return false, err
+	}
+	
+	// Check if the node matches the DaemonSet's nodeAffinity
+	if ds.Spec.Template.Spec.Affinity != nil && ds.Spec.Template.Spec.Affinity.NodeAffinity != nil {
+		nodeAffinity := ds.Spec.Template.Spec.Affinity.NodeAffinity
+		
+		// Check required node affinity
+		if nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+			matches := false
+			for _, term := range nodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+				if nodeMatchesSelectorTerm(node, &term) {
+					matches = true
+					break
+				}
+			}
+			if !matches {
+				log.Info("Node does not match DaemonSet's required node affinity", 
+					"nodeName", jfsConfig.NodeName, "dsName", dsName)
+				return false, nil
+			}
+		}
+	}
+	
+	// Check if the node has any taints that would prevent scheduling
+	// (This is a simplified check - a full implementation would need to check tolerations)
+	if len(node.Spec.Taints) > 0 && len(ds.Spec.Template.Spec.Tolerations) == 0 {
+		for _, taint := range node.Spec.Taints {
+			if taint.Effect == corev1.TaintEffectNoSchedule || taint.Effect == corev1.TaintEffectNoExecute {
+				log.Info("Node has taints that prevent scheduling", 
+					"nodeName", jfsConfig.NodeName, "taint", taint)
+				return false, nil
+			}
+		}
+	}
+	
+	return true, nil
+}
+
+// nodeMatchesSelectorTerm checks if a node matches a node selector term
+func nodeMatchesSelectorTerm(node *corev1.Node, term *corev1.NodeSelectorTerm) bool {
+	// Check match expressions
+	for _, expr := range term.MatchExpressions {
+		if !nodeMatchesExpression(node, &expr) {
+			return false
+		}
+	}
+	
+	// Check match fields
+	for _, field := range term.MatchFields {
+		if !nodeMatchesFieldSelector(node, &field) {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// nodeMatchesExpression checks if a node matches a label selector requirement
+func nodeMatchesExpression(node *corev1.Node, expr *corev1.NodeSelectorRequirement) bool {
+	value, exists := node.Labels[expr.Key]
+	
+	switch expr.Operator {
+	case corev1.NodeSelectorOpIn:
+		if !exists {
+			return false
+		}
+		for _, v := range expr.Values {
+			if value == v {
+				return true
+			}
+		}
+		return false
+	case corev1.NodeSelectorOpNotIn:
+		if !exists {
+			return true
+		}
+		for _, v := range expr.Values {
+			if value == v {
+				return false
+			}
+		}
+		return true
+	case corev1.NodeSelectorOpExists:
+		return exists
+	case corev1.NodeSelectorOpDoesNotExist:
+		return !exists
+	case corev1.NodeSelectorOpGt, corev1.NodeSelectorOpLt:
+		// These operators are typically used for numeric comparisons
+		// For simplicity, we're not implementing them here
+		return true
+	default:
+		return false
+	}
+}
+
+// nodeMatchesFieldSelector checks if a node matches a field selector
+func nodeMatchesFieldSelector(node *corev1.Node, field *corev1.NodeSelectorRequirement) bool {
+	var value string
+	switch field.Key {
+	case "metadata.name":
+		value = node.Name
+	// Add more field selectors as needed
+	default:
+		return false
+	}
+	
+	switch field.Operator {
+	case corev1.NodeSelectorOpIn:
+		for _, v := range field.Values {
+			if value == v {
+				return true
+			}
+		}
+		return false
+	case corev1.NodeSelectorOpNotIn:
+		for _, v := range field.Values {
+			if value == v {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: juicefs-daemonset-config
+  name: juicefs-mount-config
   namespace: kube-system
 data:
-  # Default configuration for all StorageClasses (if no specific config exists)
+  # Default configuration for all StorageClasses
   default: |
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
@@ -12,8 +12,8 @@ data:
         - matchExpressions:
           - key: node-role.kubernetes.io/control-plane
             operator: DoesNotExist
-  
-  # Specific configuration for a StorageClass named "juicefs-sc"
+
+  # StorageClass "juicefs-sc" configuration
   juicefs-sc: |
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
@@ -23,16 +23,3 @@ data:
             operator: In
             values:
             - "true"
-  
-  # Another StorageClass with different affinity
-  juicefs-sc-performance: |
-    nodeAffinity:
-      preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        preference:
-          matchExpressions:
-          - key: node.kubernetes.io/instance-type
-            operator: In
-            values:
-            - m5.xlarge
-            - m5.2xlarge

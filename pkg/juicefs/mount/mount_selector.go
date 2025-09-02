@@ -96,8 +96,41 @@ func (m *MountSelector) selectMount(ctx context.Context, jfsSetting *jfsConfig.J
 
 // JMount mounts JuiceFS volume
 func (m *MountSelector) JMount(ctx context.Context, appInfo *jfsConfig.AppInfo, jfsSetting *jfsConfig.JfsSetting) error {
+	log := util.GenLog(ctx, m.log, "JMount")
 	mnt := m.selectMount(ctx, jfsSetting)
-	return mnt.JMount(ctx, appInfo, jfsSetting)
+	
+	// Try to mount using the selected mount type
+	err := mnt.JMount(ctx, appInfo, jfsSetting)
+	
+	// If it's a DaemonSet scheduling error, fall back to shared pod mount
+	if IsDaemonSetSchedulingError(err) {
+		log.Info("DaemonSet cannot schedule on this node, falling back to shared pod mount", 
+			"error", err, "uniqueId", jfsSetting.UniqueId)
+		
+		// Override the mount mode to shared-pod for this specific mount
+		originalMode := jfsSetting.MountMode
+		jfsSetting.MountMode = string(jfsConfig.MountModeSharedPod)
+		
+		// Use shared pod mount as fallback
+		if m.podMount == nil {
+			m.podMount = NewPodMount(m.K8sClient, m.SafeFormatAndMount)
+		}
+		
+		err = m.podMount.JMount(ctx, appInfo, jfsSetting)
+		
+		// Restore original mode (in case it's used elsewhere)
+		jfsSetting.MountMode = originalMode
+		
+		if err != nil {
+			log.Error(err, "Fallback to shared pod mount also failed")
+			return err
+		}
+		
+		log.Info("Successfully mounted using shared pod fallback", "uniqueId", jfsSetting.UniqueId)
+		return nil
+	}
+	
+	return err
 }
 
 // GetMountRef gets mount references

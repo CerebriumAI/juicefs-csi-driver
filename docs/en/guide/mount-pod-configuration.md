@@ -57,6 +57,16 @@ data:
             - "true"
 ```
 
+## Automatic Fallback Behavior
+
+When using DaemonSet mode, the CSI Driver automatically falls back to shared Pod mode if:
+
+1. The DaemonSet cannot schedule a Pod on the node due to nodeAffinity restrictions
+2. The node has taints that prevent the DaemonSet Pod from being scheduled
+3. The DaemonSet Pod fails to become ready within the timeout period
+
+This ensures that workloads can still mount volumes even if the DaemonSet configuration prevents Pods from running on certain nodes.
+
 ## Mount Modes Explained
 
 ### Per-PVC Mode

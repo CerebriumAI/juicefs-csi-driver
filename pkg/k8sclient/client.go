@@ -439,6 +439,10 @@ func (k *K8sClient) GetConfigMap(ctx context.Context, name, namespace string) (*
 	return k.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
+func (k *K8sClient) GetNode(ctx context.Context, name string) (*corev1.Node, error) {
+	return k.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+}
+
 func (k *K8sClient) ExecuteInContainer(ctx context.Context, podName, namespace, containerName string, cmd []string) (stdout string, stderr string, err error) {
 	const tty = false
 

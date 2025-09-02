@@ -30,7 +30,7 @@ import (
 
 const (
 	MountConfigMapName = "juicefs-mount-config"
-	// Use the same DefaultConfigKey from daemonset_config.go
+	DefaultConfigKey   = "default"
 )
 
 // MountMode defines how mount pods are deployed
