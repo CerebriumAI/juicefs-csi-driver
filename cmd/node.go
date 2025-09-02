@@ -104,6 +104,9 @@ func parseNodeConfig() {
 	if os.Getenv("STORAGE_CLASS_SHARE_MOUNT") == "true" {
 		config.StorageClassShareMount = true
 	}
+	if os.Getenv("STORAGE_CLASS_DAEMONSET") == "true" {
+		config.StorageClassDaemonSet = true
+	}
 
 	if config.PodName == "" || config.Namespace == "" {
 		log.Info("Pod name & namespace can't be null.")
