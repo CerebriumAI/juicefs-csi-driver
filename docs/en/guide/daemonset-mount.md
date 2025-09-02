@@ -1,22 +1,22 @@
 # DaemonSet Mount for StorageClass
 
-This feature allows JuiceFS CSI Driver to deploy mount pods as DaemonSets instead of individual pods when using StorageClass with mount sharing enabled. This provides better resource management and control over which nodes run mount pods.
+This feature allows JuiceFS CSI Driver to deploy Mount Pods as DaemonSets instead of individual Pods when using StorageClass with mount sharing enabled. This provides better resource management and control over which nodes run Mount Pods.
 
 ## Overview
 
-When `STORAGE_CLASS_SHARE_MOUNT` is enabled, JuiceFS CSI Driver shares mount pods across multiple PVCs that use the same StorageClass. By default, these are created as individual pods. With the DaemonSet option, mount pods are deployed as DaemonSets, providing:
+When `STORAGE_CLASS_SHARE_MOUNT` is enabled, JuiceFS CSI Driver shares Mount Pods across multiple PVCs that use the same StorageClass. By default, these are created as individual Pods. With the DaemonSet option, Mount Pods are deployed as DaemonSets, providing:
 
-- **Better resource control**: DaemonSets ensure one mount pod per selected node
-- **Node affinity support**: Control which nodes run mount pods using nodeAffinity
-- **Automatic lifecycle management**: DaemonSets handle pod creation/deletion automatically
-- **Simplified operations**: Easier to manage and monitor mount pods
+- **Better resource control**: DaemonSets ensure one Mount Pod per selected node
+- **Node affinity support**: Control which nodes run Mount Pods using nodeAffinity
+- **Automatic lifecycle management**: DaemonSets handle Pod creation/deletion automatically
+- **Simplified operations**: Easier to manage and monitor Mount Pods
 - **Works with existing StorageClasses**: No need to modify or recreate StorageClasses
 
 ## Configuration
 
 ### Enable DaemonSet Mount
 
-To enable DaemonSet mount for StorageClass, set these environment variables in the CSI driver deployment:
+To enable DaemonSet mount for StorageClass, set these environment variables in the CSI Driver deployment:
 
 ```yaml
 env:
@@ -28,7 +28,7 @@ env:
 
 ### Configure Node Affinity
 
-There are two ways to configure node affinity for DaemonSet mount pods:
+There are two ways to configure node affinity for DaemonSet Mount Pods:
 
 #### Method 1: ConfigMap (Recommended for existing StorageClasses)
 
@@ -77,7 +77,7 @@ provisioner: csi.juicefs.com
 parameters:
   # ... other parameters ...
   
-  # Node affinity configuration for DaemonSet mount pods
+  # Node affinity configuration for DaemonSet Mount Pods
   nodeAffinity: |
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
@@ -91,14 +91,14 @@ parameters:
 ## How It Works
 
 1. When a PVC is created using a StorageClass with DaemonSet mount enabled:
-   - The CSI driver checks if a DaemonSet for this StorageClass already exists
+   - The CSI Driver checks if a DaemonSet for this StorageClass already exists
    - If not, it looks for node affinity configuration:
      - First checks the ConfigMap for StorageClass-specific or default configuration
      - Falls back to StorageClass parameters if specified
    - Creates a new DaemonSet with the configured node affinity
    - If DaemonSet exists, it adds a reference to the existing DaemonSet
 
-2. The DaemonSet ensures mount pods are running on selected nodes:
+2. The DaemonSet ensures Mount Pods are running on selected nodes:
    - Pods are automatically created on nodes matching the affinity rules
    - Mount paths are shared across PVCs using the same StorageClass
 
@@ -109,6 +109,7 @@ parameters:
 ## Priority Order
 
 The system checks for node affinity configuration in this order:
+
 1. **StorageClass parameters** (if `nodeAffinity` is specified)
 2. **ConfigMap with StorageClass name** as key
 3. **ConfigMap default** configuration
@@ -118,7 +119,7 @@ The system checks for node affinity configuration in this order:
 
 ### Dedicated Mount Nodes
 
-Label specific nodes for running mount pods:
+Label specific nodes for running Mount Pods:
 
 ```bash
 kubectl label nodes node1 node2 node3 juicefs/mount-node=true
@@ -128,7 +129,7 @@ Then use nodeAffinity in StorageClass to target these nodes.
 
 ### High-Performance Nodes
 
-Prefer nodes with better resources for mount pods:
+Prefer nodes with better resources for Mount Pods:
 
 ```yaml
 nodeAffinity: |
@@ -145,7 +146,7 @@ nodeAffinity: |
 
 ### Exclude Control Plane
 
-Prevent mount pods from running on control plane nodes:
+Prevent Mount Pods from running on control plane nodes:
 
 ```yaml
 nodeAffinity: |
@@ -158,7 +159,7 @@ nodeAffinity: |
 
 ## Monitoring
 
-You can monitor DaemonSet mount pods using standard Kubernetes commands:
+You can monitor DaemonSet Mount Pods using standard Kubernetes commands:
 
 ```bash
 # List all mount DaemonSets
@@ -179,16 +180,16 @@ kubectl get pods -n kube-system -l juicefs.com/mount-by=juicefs-csi-driver
 
 ## Migration
 
-To migrate from pod-based mounts to DaemonSet mounts:
+To migrate from Pod-based mounts to DaemonSet mounts:
 
-1. Enable the feature flags in CSI driver
+1. Enable the feature flags in CSI Driver
 2. Create a new StorageClass with desired node affinity
 3. Migrate PVCs to the new StorageClass
-4. Old mount pods will be replaced by DaemonSet pods
+4. Old Mount Pods will be replaced by DaemonSet Pods
 
 ## Troubleshooting
 
-### DaemonSet pods not created
+### DaemonSet Pods not created
 
 Check if nodes match the affinity rules:
 
@@ -196,7 +197,7 @@ Check if nodes match the affinity rules:
 kubectl get nodes --show-labels | grep <your-label>
 ```
 
-### Mount pods on unexpected nodes
+### Mount Pods on unexpected nodes
 
 Verify the nodeAffinity configuration:
 

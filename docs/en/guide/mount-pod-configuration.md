@@ -1,20 +1,20 @@
 # Mount Pod Configuration Guide
 
-JuiceFS CSI Driver provides flexible mount pod deployment options that can be configured per StorageClass. This allows you to optimize resource usage and performance based on your specific needs.
+JuiceFS CSI Driver provides flexible Mount Pod deployment options that can be configured per StorageClass. This allows you to optimize resource usage and performance based on your specific needs.
 
 ## Overview
 
-JuiceFS CSI Driver supports three mount pod deployment modes:
+JuiceFS CSI Driver supports three Mount Pod deployment modes:
 
-1. **Per-PVC Mode** (`per-pvc`): Creates a separate mount pod for each PVC
-2. **Shared Pod Mode** (`shared-pod`): Shares mount pods across PVCs using the same StorageClass
-3. **DaemonSet Mode** (`daemonset`): Deploys mount pods as DaemonSets with node affinity support
+1. **Per-PVC Mode** (`per-pvc`): Creates a separate Mount Pod for each PVC
+2. **Shared Pod Mode** (`shared-pod`): Shares Mount Pods across PVCs using the same StorageClass
+3. **DaemonSet Mode** (`daemonset`): Deploys Mount Pods as DaemonSets with node affinity support
 
 ## Configuration Methods
 
 ### Global Defaults (Environment Variables)
 
-Set default behavior for all StorageClasses via environment variables in the CSI driver:
+Set default behavior for all StorageClasses via environment variables in the CSI Driver:
 
 ```yaml
 env:
@@ -61,59 +61,68 @@ data:
 
 ### Per-PVC Mode
 
-Each PVC gets its own dedicated mount pod.
+Each PVC gets its own dedicated Mount Pod.
 
 **Advantages:**
+
 - Complete isolation between PVCs
 - Simple troubleshooting
 - Independent lifecycle management
 
 **Use Cases:**
+
 - Development environments
 - Multi-tenant scenarios requiring strict isolation
 - Applications with specific mount configurations
 
 **Configuration:**
+
 ```yaml
 mode: per-pvc
 ```
 
 ### Shared Pod Mode
 
-Multiple PVCs using the same StorageClass share mount pods.
+Multiple PVCs using the same StorageClass share Mount Pods.
 
 **Advantages:**
+
 - Reduced resource consumption
-- Fewer pods to manage
+- Fewer Pods to manage
 - Shared cache benefits
 
 **Use Cases:**
+
 - Production environments with many PVCs
 - Clusters with resource constraints
 - Applications with similar access patterns
 
 **Configuration:**
+
 ```yaml
 mode: shared-pod
 ```
 
 ### DaemonSet Mode
 
-Mount pods are deployed as DaemonSets across selected nodes.
+Mount Pods are deployed as DaemonSets across selected nodes.
 
 **Advantages:**
-- Predictable pod placement
+
+- Predictable Pod placement
 - Node-level resource optimization
 - Automatic scaling with node additions
 - Centralized node affinity control
 
 **Use Cases:**
+
 - High-performance computing
-- Dedicated mount nodes
+- Dedicated Mount nodes
 - GPU workloads
 - Large-scale deployments
 
 **Configuration:**
+
 ```yaml
 mode: daemonset
 nodeAffinity:
@@ -140,7 +149,7 @@ The ConfigMap approach allows you to change mount behavior **without modifying e
 
 1. Create the ConfigMap with desired configuration
 2. New PVCs will use the new mount mode
-3. Existing PVCs continue using their current mount pods
+3. Existing PVCs continue using their current Mount Pods
 
 ## Examples
 
@@ -202,7 +211,7 @@ data:
 
 ### Example 3: Node-Specific DaemonSets
 
-Deploy mount pods on specific node types:
+Deploy Mount Pods on specific node types:
 
 ```yaml
 apiVersion: v1
@@ -264,7 +273,7 @@ kubectl get configmap juicefs-mount-config -n kube-system -o jsonpath='{.data.my
 
 ## Best Practices
 
-1. **Start with shared-pod mode** for most workloads
+1. **Start with shared-Pod mode** for most workloads
 2. **Use DaemonSet mode** for:
    - High-performance requirements
    - Predictable resource allocation
@@ -279,39 +288,44 @@ kubectl get configmap juicefs-mount-config -n kube-system -o jsonpath='{.data.my
 
 ## Troubleshooting
 
-### Mount pods not created as expected
+### Mount Pods not created as expected
 
 1. Check ConfigMap exists and is valid:
+
 ```bash
 kubectl get configmap juicefs-mount-config -n kube-system
 ```
 
-2. Verify CSI driver can read ConfigMap:
+2. Verify CSI Driver can read ConfigMap:
+
 ```bash
 kubectl logs -n kube-system daemonset/juicefs-csi-node | grep "mount-config"
 ```
 
 3. Check for syntax errors in ConfigMap:
+
 ```bash
 kubectl get configmap juicefs-mount-config -n kube-system -o yaml | \
   yq eval '.data.default' - | kubectl create --dry-run=client -f -
 ```
 
-### DaemonSet pods not scheduled
+### DaemonSet Pods not scheduled
 
 1. Verify node affinity matches existing nodes:
+
 ```bash
 kubectl get nodes --show-labels
 ```
 
 2. Check DaemonSet status:
+
 ```bash
 kubectl describe daemonset -n kube-system juicefs-<uniqueid>-mount-ds
 ```
 
 ### Switching modes for existing PVCs
 
-Existing PVCs continue using their current mount pods. To switch modes:
+Existing PVCs continue using their current Mount Pods. To switch modes:
 
 1. Update ConfigMap with new configuration
 2. Delete existing PVCs (ensure data is backed up)
@@ -322,6 +336,7 @@ Existing PVCs continue using their current mount pods. To switch modes:
 ### From Environment Variables to ConfigMap
 
 1. Create ConfigMap with current behavior:
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -334,22 +349,23 @@ data:
 ```
 
 2. Deploy ConfigMap:
+
 ```bash
 kubectl apply -f juicefs-mount-config.yaml
 ```
 
 3. New PVCs will use ConfigMap configuration
-4. Optionally remove environment variables from CSI driver
+4. Optionally remove environment variables from CSI Driver
 
 ### From Per-PVC to Shared/DaemonSet
 
 1. Update ConfigMap for specific StorageClasses
 2. New PVCs use new mode automatically
-3. Optionally migrate existing PVCs during maintenance windows
+3. Optionally migrate existing PVCs during maintenance Windows
 
 ## Summary
 
-The mount pod configuration system provides:
+The Mount Pod configuration system provides:
 
 - **Flexibility**: Different modes for different workloads
 - **Compatibility**: Works with existing StorageClasses
