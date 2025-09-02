@@ -1,0 +1,151 @@
+name: JuiceFS CSI Dev CI/CD
+on:
+  pull_request:
+    branches:
+      - master
+      - release-*
+  push:
+    branches:
+      - development
+      - dev
+
+jobs:
+  build-csi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: depot/setup-action@v1
+
+      - name: Build and Push CSI Driver
+        uses: depot/build-push-action@v1
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: docker/csi.Dockerfile
+          build-contexts: |
+            project=.
+            ui=./dashboard-ui-v2
+          build-args: |
+            TARGETARCH=amd64
+            JFSCHAN=stable
+            JUICEFS_CE_MOUNT_IMAGE=juicedata/mount:ce-latest
+            JUICEFS_EE_MOUNT_IMAGE=juicedata/mount:ee-5.2.8-1305e8c
+          provenance: false
+          token: ${{ secrets.DEPOT_TOKEN }}
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-csi-driver-dev-virginia:dev
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-csi-driver-dev-virginia:pr-${{ github.event.pull_request.number || 'push' }}
+
+  build-mount-images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        edition:
+          - name: ce
+            dockerfile: ce.juicefs.Dockerfile
+            build-args: |
+              CEJUICEFS_VERSION=latest
+          - name: ee
+            dockerfile: ee.juicefs.Dockerfile
+            build-args: |
+              EEJUICEFS_VERSION=5.2.8-1305e8c
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: depot/setup-action@v1
+
+      - name: Build and Push Mount Image (${{ matrix.edition.name }})
+        uses: depot/build-push-action@v1
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: docker
+          file: docker/${{ matrix.edition.dockerfile }}
+          build-args: ${{ matrix.edition.build-args }}
+          provenance: false
+          token: ${{ secrets.DEPOT_TOKEN }}
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-mount-${{ matrix.edition.name }}-dev-virginia:dev
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-mount-${{ matrix.edition.name }}-dev-virginia:pr-${{ github.event.pull_request.number || 'push' }}
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 9
+          run_install: |
+            cwd: dashboard-ui-v2
+
+      - name: Build dashboard
+        run: make dashboard-dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: depot/setup-action@v1
+
+      - name: Build and Push Dashboard
+        uses: depot/build-push-action@v1
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: docker/dashboard.Dockerfile
+          build-contexts: |
+            project=.
+            ui=./dashboard-ui-v2
+          provenance: false
+          token: ${{ secrets.DEPOT_TOKEN }}
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-csi-dashboard-dev-virginia:dev
+            ${{ steps.login-ecr.outputs.registry }}/juicefs-csi-dashboard-dev-virginia:pr-${{ github.event.pull_request.number || 'push' }}
+
+  notify:
+    needs: [build-csi, build-mount-images, build-dashboard]
+    runs-on: ubuntu-latest
+    if: always() && needs.build-csi.result == 'success' && needs.build-mount-images.result == 'success' && needs.build-dashboard.result == 'success'
+    steps:
+      - name: Notify Slack!
+        uses: someimportantcompany/github-actions-slack-message@v1
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          text: ":construction: JuiceFS CSI Driver dev images built and pushed to ECR! :construction:"
