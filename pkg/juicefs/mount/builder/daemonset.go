@@ -134,6 +134,50 @@ func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, 
 		ds.Spec.Template.Spec.Affinity.NodeAffinity = d.jfsSetting.StorageClassNodeAffinity
 	}
 
+	// Fix tolerations for DaemonSet pods to ensure they don't terminate before application pods
+	// During node shutdown, we need the mount pods to stay alive longer than application pods
+	tolerations := ds.Spec.Template.Spec.Tolerations
+	hasNotReadyToleration := false
+	hasUnreachableToleration := false
+	
+	// Check existing tolerations and update if needed
+	for i := range tolerations {
+		if tolerations[i].Key == "node.kubernetes.io/not-ready" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
+			// Set a high toleration time (12 hours) to ensure mount pod survives during node shutdown
+			tolerationSeconds := int64(43200)
+			tolerations[i].TolerationSeconds = &tolerationSeconds
+			hasNotReadyToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/unreachable" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
+			// Set a high toleration time (12 hours) to ensure mount pod survives during node shutdown
+			tolerationSeconds := int64(43200)
+			tolerations[i].TolerationSeconds = &tolerationSeconds
+			hasUnreachableToleration = true
+		}
+	}
+	
+	// Add tolerations if they don't exist
+	if !hasNotReadyToleration {
+		tolerationSeconds := int64(43200) // 12 hours
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:               "node.kubernetes.io/not-ready",
+			Operator:          corev1.TolerationOpExists,
+			Effect:            corev1.TaintEffectNoExecute,
+			TolerationSeconds: &tolerationSeconds,
+		})
+	}
+	if !hasUnreachableToleration {
+		tolerationSeconds := int64(43200) // 12 hours
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:               "node.kubernetes.io/unreachable",
+			Operator:          corev1.TolerationOpExists,
+			Effect:            corev1.TaintEffectNoExecute,
+			TolerationSeconds: &tolerationSeconds,
+		})
+	}
+	
+	ds.Spec.Template.Spec.Tolerations = tolerations
+
 	return ds, nil
 }
 
