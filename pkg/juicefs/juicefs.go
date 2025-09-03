@@ -200,7 +200,8 @@ func NewJfsProvider(mounter *mount.SafeFormatAndMount, k8sClient *k8sclient.K8sC
 	if config.ByProcess {
 		mnt = podmount.NewProcessMount(*mounter)
 	} else {
-		mnt = podmount.NewPodMount(k8sClient, *mounter)
+		// Use MountSelector to dynamically choose mount implementation based on configuration
+		mnt = podmount.NewMountSelector(k8sClient, *mounter)
 	}
 
 	uuidMaps := make(map[string]string)
@@ -371,18 +372,18 @@ func (j *juicefs) genJfsSettings(ctx context.Context, volumeID string, target st
 }
 
 // getUniqueId: get UniqueId from volumeId (volumeHandle of PV)
-// When STORAGE_CLASS_SHARE_MOUNT env is set:
+// The uniqueId determines how mount pods are grouped:
 //
-//	in dynamic provision, UniqueId set as SC name
-//	if sc secrets is template. UniqueId set as volumeId
-//	in static provision, UniqueId set as volumeId
-//
-// When STORAGE_CLASS_SHARE_MOUNT env not set:
-//
-//	UniqueId set as volumeId
+//	per-pvc mode: UniqueId set as volumeId (each PVC gets its own mount pod)
+//	shared-pod/daemonset mode in dynamic provision: UniqueId set as SC name
+//	  (if sc secrets is template, UniqueId set as volumeId)
+//	shared-pod/daemonset mode in static provision: UniqueId set as volumeId
 func (j *juicefs) getUniqueId(ctx context.Context, volumeId string) (string, error) {
 	log := util.GenLog(ctx, jfsLog, "getUniqueId")
-	if config.StorageClassShareMount && !config.ByProcess {
+	
+	// First check if we should use shared mount based on configuration
+	// This will be determined when loading mount config
+	if !config.ByProcess {
 		pv, err := j.K8sClient.GetPersistentVolume(ctx, volumeId)
 		// In static provision, volumeId may not be PV name, it is expected that PV cannot be found by volumeId
 		if err != nil && !k8serrors.IsNotFound(err) {
