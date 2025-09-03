@@ -428,6 +428,20 @@ func (p *PodDriver) podDeletedHandler(ctx context.Context, pod *corev1.Pod) (Res
 		return Result{}, nil
 	}
 	log := util.GenLog(ctx, podDriverLog, "podDeletedHandler")
+	
+	// Skip DaemonSet pods - they are managed by the DaemonSet controller
+	if isDaemonSetPod(pod) {
+		log.V(1).Info("Pod is managed by DaemonSet, skipping deletion handler")
+		// Remove finalizer if present to allow DaemonSet controller to manage the pod
+		if util.ContainsString(pod.GetFinalizers(), common.Finalizer) {
+			if err := resource.RemoveFinalizer(ctx, p.Client, pod, common.Finalizer); err != nil {
+				log.Error(err, "Failed to remove finalizer from DaemonSet pod")
+				return Result{}, err
+			}
+		}
+		return Result{}, nil
+	}
+	
 	log.Info("Pod is to be deleted.")
 
 	// pod with no finalizer

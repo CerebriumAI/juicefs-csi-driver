@@ -43,6 +43,10 @@ func NewDaemonSetBuilder(setting *config.JfsSetting, capacity int64) *DaemonSetB
 
 // NewMountDaemonSet generates a DaemonSet with juicefs client for storage class sharing
 func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, error) {
+	// Fix tolerations for DaemonSet pods BEFORE building to ensure consistent hash
+	// During node shutdown, we need the mount pods to stay alive longer than application pods
+	d.ensureDaemonSetTolerations()
+	
 	podBuilder := NewPodBuilder(d.jfsSetting, d.capacity)
 	
 	// Create template pod for DaemonSet
@@ -134,31 +138,35 @@ func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, 
 		ds.Spec.Template.Spec.Affinity.NodeAffinity = d.jfsSetting.StorageClassNodeAffinity
 	}
 
-	// Fix tolerations for DaemonSet pods to ensure they don't terminate before application pods
-	// During node shutdown, we need the mount pods to stay alive longer than application pods
-	tolerations := ds.Spec.Template.Spec.Tolerations
+	return ds, nil
+}
+
+// ensureDaemonSetTolerations modifies the JfsSetting to ensure DaemonSet pods have proper tolerations
+// This must be done before hash calculation to ensure consistency
+func (d *DaemonSetBuilder) ensureDaemonSetTolerations() {
+	if d.jfsSetting.Attr == nil {
+		return
+	}
+	
+	tolerations := d.jfsSetting.Attr.Tolerations
 	hasNotReadyToleration := false
 	hasUnreachableToleration := false
+	tolerationSeconds := int64(43200) // 12 hours
 	
-	// Check existing tolerations and update if needed
+	// Check and update existing tolerations
 	for i := range tolerations {
 		if tolerations[i].Key == "node.kubernetes.io/not-ready" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
-			// Set a high toleration time (12 hours) to ensure mount pod survives during node shutdown
-			tolerationSeconds := int64(43200)
 			tolerations[i].TolerationSeconds = &tolerationSeconds
 			hasNotReadyToleration = true
 		}
 		if tolerations[i].Key == "node.kubernetes.io/unreachable" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
-			// Set a high toleration time (12 hours) to ensure mount pod survives during node shutdown
-			tolerationSeconds := int64(43200)
 			tolerations[i].TolerationSeconds = &tolerationSeconds
 			hasUnreachableToleration = true
 		}
 	}
 	
-	// Add tolerations if they don't exist
+	// Add missing tolerations
 	if !hasNotReadyToleration {
-		tolerationSeconds := int64(43200) // 12 hours
 		tolerations = append(tolerations, corev1.Toleration{
 			Key:               "node.kubernetes.io/not-ready",
 			Operator:          corev1.TolerationOpExists,
@@ -167,7 +175,6 @@ func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, 
 		})
 	}
 	if !hasUnreachableToleration {
-		tolerationSeconds := int64(43200) // 12 hours
 		tolerations = append(tolerations, corev1.Toleration{
 			Key:               "node.kubernetes.io/unreachable",
 			Operator:          corev1.TolerationOpExists,
@@ -176,9 +183,7 @@ func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, 
 		})
 	}
 	
-	ds.Spec.Template.Spec.Tolerations = tolerations
-
-	return ds, nil
+	d.jfsSetting.Attr.Tolerations = tolerations
 }
 
 // GenDaemonSetNameByUniqueId generates DaemonSet name by unique ID
