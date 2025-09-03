@@ -93,7 +93,6 @@ func TestGetMountConfig(t *testing.T) {
 		storageClassName string
 		configMap        *corev1.ConfigMap
 		globalShareMount bool
-		globalDaemonSet  bool
 		wantMode         MountMode
 		wantHasAffinity  bool
 	}{
@@ -102,7 +101,6 @@ func TestGetMountConfig(t *testing.T) {
 			storageClassName: "test-sc",
 			configMap:        nil,
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMode:         MountModePVC,
 		},
 		{
@@ -110,16 +108,7 @@ func TestGetMountConfig(t *testing.T) {
 			storageClassName: "test-sc",
 			configMap:        nil,
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMode:         MountModeSharedPod,
-		},
-		{
-			name:             "no configmap, use global daemonset",
-			storageClassName: "test-sc",
-			configMap:        nil,
-			globalShareMount: true,
-			globalDaemonSet:  true,
-			wantMode:         MountModeDaemonSet,
 		},
 		{
 			name:             "configmap with default",
@@ -179,7 +168,6 @@ nodeAffinity:
 		t.Run(tt.name, func(t *testing.T) {
 			// Set global variables
 			StorageClassShareMount = tt.globalShareMount
-			StorageClassDaemonSet = tt.globalDaemonSet
 			
 			// Create fake k8s client
 			var objects []runtime.Object

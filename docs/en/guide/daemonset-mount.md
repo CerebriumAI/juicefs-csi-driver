@@ -16,15 +16,15 @@ When `STORAGE_CLASS_SHARE_MOUNT` is enabled, JuiceFS CSI Driver shares Mount Pod
 
 ### Enable DaemonSet Mount
 
-To enable DaemonSet mount for StorageClass, set these environment variables in the CSI Driver deployment:
+DaemonSet mount is automatically available when mount sharing is enabled. To enable mount sharing, set this environment variable in the CSI Driver deployment:
 
 ```yaml
 env:
   - name: STORAGE_CLASS_SHARE_MOUNT
     value: "true"
-  - name: STORAGE_CLASS_DAEMONSET
-    value: "true"
 ```
+
+Once enabled, you can configure specific StorageClasses to use DaemonSet mode via the ConfigMap (see below).
 
 ### Configure Node Affinity
 
@@ -174,9 +174,9 @@ kubectl get pods -n kube-system -l juicefs.com/mount-by=juicefs-csi-driver
 
 ## Limitations
 
-- Node affinity is only applied when both `STORAGE_CLASS_SHARE_MOUNT` and `STORAGE_CLASS_DAEMONSET` are enabled
+- Node affinity is only applied when `STORAGE_CLASS_SHARE_MOUNT` is enabled and DaemonSet mode is configured
 - All PVCs using the same StorageClass share the same DaemonSet and node affinity rules
-- Changing node affinity requires recreating the StorageClass and associated PVCs
+- Changing node affinity requires recreating the DaemonSet (happens automatically when all PVCs are deleted)
 
 ## Migration
 

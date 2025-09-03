@@ -140,10 +140,9 @@ func parseMountConfig(configData string) (*MountConfig, error) {
 // getDefaultMountMode returns the default mount mode based on environment variables
 func getDefaultMountMode() MountMode {
 	// Check global environment variable settings
+	// When StorageClassShareMount is enabled, default to shared-pod
+	// DaemonSet mode is only used when explicitly configured via ConfigMap
 	if StorageClassShareMount {
-		if StorageClassDaemonSet {
-			return MountModeDaemonSet
-		}
 		return MountModeSharedPod
 	}
 	return MountModePVC

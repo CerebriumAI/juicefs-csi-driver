@@ -50,8 +50,7 @@ var (
 	Webhook                = false            // start webhook server, used in sidecar mode or validating/mutating webhook
 	ValidatingWebhook      = false            // start validating webhook, applicable to ee only
 	Immutable              = false            // csi driver is running in an immutable environment
-	StorageClassShareMount = false            // share mount pod for the same storage class
-	StorageClassDaemonSet  = false            // deploy mount pods as DaemonSet for storage class
+	StorageClassShareMount = false            // share mount pod for the same storage class (enables shared-pod and daemonset modes)
 	AccessToKubelet        = false            // access kubelet or not
 
 	DriverName               = "csi.juicefs.com"

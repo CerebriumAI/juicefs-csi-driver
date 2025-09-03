@@ -40,7 +40,6 @@ func TestMountSelector_SelectMount(t *testing.T) {
 		byProcess        bool
 		configMap        *corev1.ConfigMap
 		globalShareMount bool
-		globalDaemonSet  bool
 		wantMountType    string // "process", "daemonset", "pod"
 	}{
 		{
@@ -79,21 +78,6 @@ func TestMountSelector_SelectMount(t *testing.T) {
 			wantMountType: "pod",
 		},
 		{
-			name: "fallback to global daemonset when no mode specified",
-			jfsSetting: &jfsConfig.JfsSetting{
-				UniqueId: "test-id",
-				PV: &corev1.PersistentVolume{
-					Spec: corev1.PersistentVolumeSpec{
-						StorageClassName: "test-sc",
-					},
-				},
-			},
-			byProcess:        false,
-			globalShareMount: true,
-			globalDaemonSet:  true,
-			wantMountType:    "daemonset",
-		},
-		{
 			name: "fallback to global shared pod when no mode specified",
 			jfsSetting: &jfsConfig.JfsSetting{
 				UniqueId: "test-id",
@@ -105,7 +89,6 @@ func TestMountSelector_SelectMount(t *testing.T) {
 			},
 			byProcess:        false,
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMountType:    "pod",
 		},
 		{
@@ -120,7 +103,6 @@ func TestMountSelector_SelectMount(t *testing.T) {
 			},
 			byProcess:        false,
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMountType:    "pod",
 		},
 		{
@@ -174,7 +156,6 @@ func TestMountSelector_SelectMount(t *testing.T) {
 			// Set global variables
 			jfsConfig.ByProcess = tt.byProcess
 			jfsConfig.StorageClassShareMount = tt.globalShareMount
-			jfsConfig.StorageClassDaemonSet = tt.globalDaemonSet
 			
 			// Create fake k8s client
 			var objects []runtime.Object
@@ -278,7 +259,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 		jfsSetting       *jfsConfig.JfsSetting
 		configMap        *corev1.ConfigMap
 		globalShareMount bool
-		globalDaemonSet  bool
 		wantMountMode    jfsConfig.MountMode
 	}{
 		{
@@ -293,7 +273,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 			},
 			configMap:        nil,
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMountMode:    jfsConfig.MountModePVC,
 		},
 		{
@@ -308,23 +287,7 @@ func TestMountSelector_Fallback(t *testing.T) {
 			},
 			configMap:        nil,
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMountMode:    jfsConfig.MountModeSharedPod,
-		},
-		{
-			name: "no configmap, use global daemonset",
-			jfsSetting: &jfsConfig.JfsSetting{
-				UniqueId: "test-id",
-				PV: &corev1.PersistentVolume{
-					Spec: corev1.PersistentVolumeSpec{
-						StorageClassName: "test-sc",
-					},
-				},
-			},
-			configMap:        nil,
-			globalShareMount: true,
-			globalDaemonSet:  true,
-			wantMountMode:    jfsConfig.MountModeDaemonSet,
 		},
 		{
 			name: "invalid config in configmap, fallback to global",
@@ -346,7 +309,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 				},
 			},
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMountMode:    jfsConfig.MountModeSharedPod,
 		},
 		{
@@ -369,7 +331,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 				},
 			},
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMountMode:    jfsConfig.MountModePVC,
 		},
 		{
@@ -392,7 +353,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 				},
 			},
 			globalShareMount: true,
-			globalDaemonSet:  true,
 			wantMountMode:    jfsConfig.MountModePVC,
 		},
 		{
@@ -416,7 +376,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 				},
 			},
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMountMode:    jfsConfig.MountModeSharedPod,
 		},
 	}
@@ -426,7 +385,6 @@ func TestMountSelector_Fallback(t *testing.T) {
 			// Set global variables
 			jfsConfig.ByProcess = false
 			jfsConfig.StorageClassShareMount = tt.globalShareMount
-			jfsConfig.StorageClassDaemonSet = tt.globalDaemonSet
 			
 			// Create fake k8s client
 			var objects []runtime.Object

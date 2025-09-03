@@ -94,9 +94,6 @@ func parseControllerConfig() {
 	if os.Getenv("STORAGE_CLASS_SHARE_MOUNT") == "true" {
 		config.StorageClassShareMount = true
 	}
-	if os.Getenv("STORAGE_CLASS_DAEMONSET") == "true" {
-		config.StorageClassDaemonSet = true
-	}
 	if !config.Webhook {
 		// When not in sidecar mode, we should inherit attributes from CSI Node pod.
 		k8sclient, err := k8s.NewClient()

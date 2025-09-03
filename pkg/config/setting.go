@@ -300,7 +300,7 @@ func ParseSetting(ctx context.Context, secrets, volCtx map[string]string, option
 		
 		// Parse node affinity for DaemonSet deployment
 		// First check if it's in volCtx (for backward compatibility)
-		if volCtx["nodeAffinity"] != "" && StorageClassShareMount && StorageClassDaemonSet {
+		if volCtx["nodeAffinity"] != "" && StorageClassShareMount {
 			nodeAffinity := &corev1.NodeAffinity{}
 			if err := yaml.Unmarshal([]byte(volCtx["nodeAffinity"]), nodeAffinity); err != nil {
 				log.Error(err, "Failed to parse nodeAffinity", "nodeAffinity", volCtx["nodeAffinity"])

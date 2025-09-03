@@ -243,7 +243,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 		configMap        *corev1.ConfigMap
 		storageClassName string
 		globalShareMount bool
-		globalDaemonSet  bool
 		wantMode         jfsConfig.MountMode
 	}{
 		{
@@ -251,7 +250,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 			configMap:        nil,
 			storageClassName: "test-sc",
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMode:         jfsConfig.MountModePVC,
 		},
 		{
@@ -259,16 +257,7 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 			configMap:        nil,
 			storageClassName: "test-sc",
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMode:         jfsConfig.MountModeSharedPod,
-		},
-		{
-			name:             "no configmap, fallback to global daemonset",
-			configMap:        nil,
-			storageClassName: "test-sc",
-			globalShareMount: true,
-			globalDaemonSet:  true,
-			wantMode:         jfsConfig.MountModeDaemonSet,
 		},
 		{
 			name: "invalid config in configmap, fallback to global",
@@ -283,7 +272,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 			},
 			storageClassName: "test-sc",
 			globalShareMount: true,
-			globalDaemonSet:  false,
 			wantMode:         jfsConfig.MountModeSharedPod,
 		},
 		{
@@ -299,7 +287,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 			},
 			storageClassName: "test-sc",
 			globalShareMount: true,
-			globalDaemonSet:  true,
 			wantMode:         jfsConfig.MountModePVC,
 		},
 		{
@@ -315,7 +302,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 			},
 			storageClassName: "unknown-sc",
 			globalShareMount: false,
-			globalDaemonSet:  false,
 			wantMode:         jfsConfig.MountModeDaemonSet,
 		},
 	}
@@ -324,7 +310,6 @@ func TestMountSelector_ConfigFallback(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set global variables
 			jfsConfig.StorageClassShareMount = tt.globalShareMount
-			jfsConfig.StorageClassDaemonSet = tt.globalDaemonSet
 			
 			// Create fake k8s client
 			var objects []runtime.Object

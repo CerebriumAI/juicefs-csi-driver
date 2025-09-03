@@ -80,9 +80,11 @@ func parseDaemonSetNodeAffinity(configData string) (*corev1.NodeAffinity, error)
 func LoadDaemonSetNodeAffinity(ctx context.Context, client *k8sclient.K8sClient, jfsSetting *JfsSetting) error {
 	log := klog.NewKlogr().WithName("mount-config")
 	
-	// Skip if not using DaemonSet deployment
-	if !StorageClassShareMount || !StorageClassDaemonSet {
-		return nil
+	// This should only be called when mount sharing is enabled
+	// If we're here without mount sharing, it's a programming error
+	if !StorageClassShareMount {
+		log.Error(nil, "LoadDaemonSetNodeAffinity called but StorageClassShareMount is false - this should not happen")
+		return fmt.Errorf("LoadDaemonSetNodeAffinity called without mount sharing enabled")
 	}
 
 	// Skip if node affinity already set (from StorageClass parameters)

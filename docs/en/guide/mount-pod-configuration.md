@@ -18,16 +18,15 @@ Set default behavior for all StorageClasses via environment variables in the CSI
 
 ```yaml
 env:
-  # For shared pod mode (default)
+  # Enable mount sharing (defaults to shared-pod mode)
   - name: STORAGE_CLASS_SHARE_MOUNT
-    value: "true"
-  
-  # For DaemonSet mode
-  - name: STORAGE_CLASS_SHARE_MOUNT
-    value: "true"
-  - name: STORAGE_CLASS_DAEMONSET
     value: "true"
 ```
+
+When `STORAGE_CLASS_SHARE_MOUNT` is enabled:
+- Default mode is `shared-pod` 
+- DaemonSet mode can be configured per StorageClass via ConfigMap
+- Per-PVC mode can still be explicitly configured via ConfigMap
 
 ### Per-StorageClass Configuration (ConfigMap)
 
