@@ -75,27 +75,21 @@ func (d *DaemonSetMount) JMount(ctx context.Context, appInfo *jfsConfig.AppInfo,
 	jfsSetting.HashVal = hashVal
 	jfsSetting.UpgradeUUID = string(uuid.NewUUID())
 	
-	var dsName string
-	var err error
-
-	if err = func() error {
-		lock := jfsConfig.GetPodLock(hashVal)
-		lock.Lock()
-		defer lock.Unlock()
-
-		dsName = d.genDaemonSetName(jfsSetting)
-		
-		// Create or update DaemonSet
-		err = d.createOrUpdateDaemonSet(ctx, dsName, jfsSetting)
-		if err != nil {
-			return err
-		}
-		
-		return nil
-	}(); err != nil {
+	// Use a combination of hash and target path as lock key for finer-grained locking
+	// This prevents race conditions when multiple pods mount the same PVC
+	lockKey := fmt.Sprintf("%s-%s", hashVal, jfsSetting.TargetPath)
+	lock := jfsConfig.GetPodLock(lockKey)
+	lock.Lock()
+	defer lock.Unlock()
+	
+	dsName := d.genDaemonSetName(jfsSetting)
+	
+	// Create or update DaemonSet
+	err := d.createOrUpdateDaemonSet(ctx, dsName, jfsSetting)
+	if err != nil {
 		return err
 	}
-
+	
 	// Wait for DaemonSet to be ready on the current node
 	err = d.waitUntilDaemonSetReady(ctx, dsName, jfsSetting)
 	if err != nil {

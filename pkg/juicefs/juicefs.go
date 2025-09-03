@@ -78,6 +78,7 @@ type juicefs struct {
 	mnt          podmount.MntInterface
 	UUIDMaps     map[string]string
 	CacheDirMaps map[string][]string
+	authMutex    sync.Mutex // Mutex specifically for AuthFs operations
 }
 
 var _ Interface = &juicefs{}
@@ -576,6 +577,12 @@ func (j *juicefs) JfsCleanupMountPoint(ctx context.Context, mountPath string) er
 // AuthFs authenticates JuiceFS, enterprise edition only
 func (j *juicefs) AuthFs(ctx context.Context, secrets map[string]string, setting *config.JfsSetting, force bool) (string, error) {
 	log := util.GenLog(ctx, jfsLog, "AuthFs")
+	
+	// Serialize AuthFs operations to prevent concurrent authentication attempts
+	// which can cause conflicts and authentication failures
+	j.authMutex.Lock()
+	defer j.authMutex.Unlock()
+	
 	args, cmdArgs, err := config.GenAuthCmd(secrets, setting)
 	if err != nil {
 		return "", err
@@ -615,6 +622,12 @@ func (j *juicefs) AuthFs(ctx context.Context, secrets map[string]string, setting
 
 func (j *juicefs) SetQuota(ctx context.Context, secrets map[string]string, jfsSetting *config.JfsSetting, quotaPath string, capacity int64) error {
 	log := util.GenLog(ctx, jfsLog, "SetQuota")
+	
+	// Serialize SetQuota operations to prevent concurrent quota setting attempts
+	// Use the same authMutex since AuthFs is often called before SetQuota
+	j.authMutex.Lock()
+	defer j.authMutex.Unlock()
+	
 	cap := capacity / 1024 / 1024 / 1024
 	if cap <= 0 {
 		return fmt.Errorf("capacity %d is too small, at least 1GiB for quota", capacity)
