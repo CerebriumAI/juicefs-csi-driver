@@ -76,7 +76,6 @@ jobs:
           file: docker/csi.Dockerfile
           context: "{{defaultContext}}"
           build-args: |
-            TARGETARCH=amd64
             JFSCHAN=stable
             JUICEFS_CE_MOUNT_IMAGE=juicedata/mount:ce-latest
             JUICEFS_EE_MOUNT_IMAGE=juicedata/mount:ee-5.2.8-1305e8c
