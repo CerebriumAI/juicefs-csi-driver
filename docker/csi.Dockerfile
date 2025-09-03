@@ -82,11 +82,26 @@ RUN apt-get update && apt-get install -y curl fuse procps iputils-ping strace ip
   mkdir /root/.acl && cp /etc/passwd /root/.acl/passwd && cp /etc/group /root/.acl/group && \
   ln -sf /root/.acl/passwd /etc/passwd && ln -sf /root/.acl/group  /etc/group
 
-RUN jfs_mount_path=${JFS_MOUNT_PATH} && \
-  bash -c "if [[ '${JFSCHAN}' == beta ]]; then curl -sSL https://static.juicefs.com/release/bin_pkgs/beta_full.tar.gz | tar -xz; jfs_mount_path=${JFS_MOUNT_PATH}.beta; \
-  else curl -sSL https://static.juicefs.com/release/bin_pkgs/latest_stable_full.tar.gz | tar -xz; jfs_mount_path=${JFS_MOUNT_PATH}.stable; fi;" && \
-  bash -c "mkdir -p /usr/local/juicefs/mount; if [[ '${TARGETARCH}' == amd64 ]]; then cp Linux/mount.ceph $jfs_mount_path; else cp Linux/mount.aarch64 $jfs_mount_path; fi;" && \
-  chmod +x ${jfs_mount_path} && cp juicefs.py ${JUICEFS_CLI} && chmod +x ${JUICEFS_CLI}
+RUN bash -c "if [[ '${JFSCHAN}' == beta ]]; then \
+    curl -sSL https://static.juicefs.com/release/bin_pkgs/beta_full.tar.gz | tar -xz; \
+    mkdir -p /usr/local/juicefs/mount; \
+    if [[ '${TARGETARCH}' == amd64 ]]; then \
+      cp Linux/mount.ceph /usr/local/juicefs/mount/jfsmount.beta; \
+    else \
+      cp Linux/mount.aarch64 /usr/local/juicefs/mount/jfsmount.beta; \
+    fi; \
+    chmod +x /usr/local/juicefs/mount/jfsmount.beta; \
+  else \
+    curl -sSL https://static.juicefs.com/release/bin_pkgs/latest_stable_full.tar.gz | tar -xz; \
+    mkdir -p /usr/local/juicefs/mount; \
+    if [[ '${TARGETARCH}' == amd64 ]]; then \
+      cp Linux/mount.ceph /usr/local/juicefs/mount/jfsmount.stable; \
+    else \
+      cp Linux/mount.aarch64 /usr/local/juicefs/mount/jfsmount.stable; \
+    fi; \
+    chmod +x /usr/local/juicefs/mount/jfsmount.stable; \
+  fi" && \
+  cp juicefs.py ${JUICEFS_CLI} && chmod +x ${JUICEFS_CLI}
 
 COPY --from=csi-builder /workspace/bin/juicefs-csi-driver /usr/local/bin/
 COPY --from=juicefs-builder /workspace/juicefs/juicefs /usr/local/bin/
