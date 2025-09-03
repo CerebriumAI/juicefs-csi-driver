@@ -470,7 +470,6 @@ func (p *PodDriver) podDeletedHandler(ctx context.Context, pod *corev1.Pod) (Res
 				log.Error(err, "Failed to load mount config, continuing with pod recreation")
 			} else if config.ShouldUseDaemonSet(setting) {
 				log.Info("Mount mode is DaemonSet, skipping pod recreation", 
-					"storageClass", setting.StorageClass,
 					"uniqueId", setting.UniqueId)
 				// Just remove finalizer and let DaemonSet handle the mount
 				if err := resource.RemoveFinalizer(ctx, p.Client, pod, common.Finalizer); err != nil {
