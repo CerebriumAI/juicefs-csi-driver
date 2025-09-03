@@ -48,6 +48,8 @@ func (d *DaemonSetBuilder) NewMountDaemonSet(dsName string) (*appsv1.DaemonSet, 
 	// Create template pod for DaemonSet
 	pod := podBuilder.genCommonJuicePod(podBuilder.genCommonContainer)
 	pod.Spec.RestartPolicy = corev1.RestartPolicyAlways
+	// Remove NodeName from DaemonSet pod template - DaemonSet controller manages pod placement
+	pod.Spec.NodeName = ""
 
 	// Generate mount command
 	mountCmd := d.genMountCommand()
