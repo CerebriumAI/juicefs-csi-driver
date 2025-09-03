@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: juicefs-mount-config
-  namespace: kube-system
+  namespace: juicefs
 data:
   # Default configuration for all StorageClasses
   default: |

@@ -4,35 +4,71 @@ This feature allows JuiceFS CSI Driver to deploy Mount Pods as DaemonSets instea
 
 ## Overview
 
-When `STORAGE_CLASS_SHARE_MOUNT` is enabled, JuiceFS CSI Driver shares Mount Pods across multiple PVCs that use the same StorageClass. By default, these are created as individual Pods. With the DaemonSet option, Mount Pods are deployed as DaemonSets, providing:
+When `STORAGE_CLASS_SHARE_MOUNT` is enabled, JuiceFS CSI Driver shares Mount Pods across multiple PVCs that use the same StorageClass. By default, these are created as individual shared Pods. With the DaemonSet option, Mount Pods are deployed as DaemonSets, providing:
 
 - **Better resource control**: DaemonSets ensure one Mount Pod per selected node
 - **Node affinity support**: Control which nodes run Mount Pods using nodeAffinity
 - **Automatic lifecycle management**: DaemonSets handle Pod creation/deletion automatically
 - **Simplified operations**: Easier to manage and monitor Mount Pods
 - **Works with existing StorageClasses**: No need to modify or recreate StorageClasses
+- **Automatic mode transition**: Seamlessly switches from shared-pod to DaemonSet mode
+
+## Prerequisites
+
+### 1. Enable Mount Sharing
+
+Set the `STORAGE_CLASS_SHARE_MOUNT` environment variable in **BOTH** the CSI Controller and CSI Node components:
+
+```yaml
+# For StatefulSet (Controller)
+kubectl set env statefulset/juicefs-csi-controller -n kube-system STORAGE_CLASS_SHARE_MOUNT=true
+
+# For DaemonSet (Node)
+kubectl set env daemonset/juicefs-csi-node -n kube-system STORAGE_CLASS_SHARE_MOUNT=true
+```
+
+Or add to your Helm values:
+
+```yaml
+node:
+  storageClassShareMount: true
+controller:
+  storageClassShareMount: true  # Note: This may need to be added to the Helm chart
+```
+
+### 2. Grant RBAC Permissions
+
+The CSI Node service account needs permissions to manage DaemonSets. Add these permissions:
+
+```yaml
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+```
+
+This is included in the latest deployment manifests (`deploy/k8s.yaml`).
 
 ## Configuration
 
-### Enable DaemonSet Mount
+### Mount Modes
 
-DaemonSet mount is automatically available when mount sharing is enabled. To enable mount sharing, set this environment variable in the CSI Driver deployment:
+JuiceFS CSI Driver supports three mount modes:
 
-```yaml
-env:
-  - name: STORAGE_CLASS_SHARE_MOUNT
-    value: "true"
-```
+1. **`pvc`** (or `mountpod`): One mount pod per PVC - each PVC gets its own dedicated mount pod
+2. **`shared-pod`**: One shared mount pod per StorageClass per node - multiple PVCs share a mount pod
+3. **`daemonset`**: One DaemonSet for the entire StorageClass - ensures one mount pod per selected node
 
-Once enabled, you can configure specific StorageClasses to use DaemonSet mode via the ConfigMap (see below).
+### Configure Mount Mode and Node Affinity
 
-### Configure Node Affinity
-
-There are two ways to configure node affinity for DaemonSet Mount Pods:
-
-#### Method 1: ConfigMap (Recommended for existing StorageClasses)
-
-Create a ConfigMap to define node affinity for your StorageClasses without modifying them:
+Create a ConfigMap to configure mount mode and optionally node affinity:
 
 ```yaml
 apiVersion: v1
@@ -43,24 +79,26 @@ metadata:
 data:
   # Default configuration for all StorageClasses
   default: |
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: node-role.kubernetes.io/control-plane
-            operator: DoesNotExist
+    mode: shared-pod  # Options: "pvc", "shared-pod", "daemonset"
+    # nodeAffinity is NOT required for pvc or shared-pod modes
   
   # Configuration for specific StorageClass by name
-  my-existing-storageclass: |
-    nodeAffinity:
+  my-storageclass: |
+    mode: daemonset
+    nodeAffinity:  # Required for daemonset mode to control which nodes run mount pods
       requiredDuringSchedulingIgnoredDuringExecution:
         nodeSelectorTerms:
         - matchExpressions:
-          - key: juicefs/mount-node
+          - key: node.kubernetes.io/workload
             operator: In
             values:
-            - "true"
+            - "compute"
 ```
+
+**Important notes:**
+- `mode`: Choose from `pvc`, `shared-pod`, or `daemonset`
+- `nodeAffinity`: Only required for `daemonset` mode to control which nodes the DaemonSet runs on
+  - NOT required for `pvc` or `shared-pod` modes (pods are created on-demand where PVCs are used)
 
 This method works with existing StorageClasses without any modifications.
 

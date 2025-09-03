@@ -462,6 +462,25 @@ func (p *PodDriver) podDeletedHandler(ctx context.Context, pod *corev1.Pod) (Res
 
 	// create
 	if len(existTargets) != 0 && !hasAvailPod {
+		// Check if we're using DaemonSet mode for this storage class
+		// If so, don't recreate shared pods - let DaemonSet handle it
+		if config.StorageClassShareMount && setting != nil {
+			// Load mount configuration to check mode
+			if err := config.LoadMountConfig(ctx, p.Client, setting); err != nil {
+				log.Error(err, "Failed to load mount config, continuing with pod recreation")
+			} else if config.ShouldUseDaemonSet(setting) {
+				log.Info("Mount mode is DaemonSet, skipping pod recreation", 
+					"storageClass", setting.StorageClass,
+					"uniqueId", setting.UniqueId)
+				// Just remove finalizer and let DaemonSet handle the mount
+				if err := resource.RemoveFinalizer(ctx, p.Client, pod, common.Finalizer); err != nil {
+					log.Error(err, "remove pod finalizer error")
+					return Result{}, err
+				}
+				return Result{}, nil
+			}
+		}
+		
 		// create pod
 		newPodName := podmount.GenPodNameByUniqueId(resource.GetUniqueId(*pod), true)
 		log.Info("pod targetPath not empty, need to create a new one", "newPodName", newPodName)
