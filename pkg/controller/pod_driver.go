@@ -180,6 +180,22 @@ func getPodStatus(pod *corev1.Pod) podStatus {
 	return podPending
 }
 
+// isDaemonSetPod checks if a pod is managed by a DaemonSet
+func isDaemonSetPod(pod *corev1.Pod) bool {
+	// Check if pod is owned by a DaemonSet
+	for _, owner := range pod.OwnerReferences {
+		if owner.Kind == "DaemonSet" {
+			return true
+		}
+	}
+	// Also check if pod name matches DaemonSet pattern (for backward compatibility)
+	// DaemonSet mount pods have names like "juicefs-<uniqueid>-mount-ds-<suffix>"
+	if strings.Contains(pod.Name, "-mount-ds-") {
+		return true
+	}
+	return false
+}
+
 // checkAnnotations
 // 1. check refs in mount pod annotation
 // 2. delete ref that target pod is not found
@@ -227,6 +243,14 @@ func (p *PodDriver) checkAnnotations(ctx context.Context, pod *corev1.Pod) error
 		}
 	}
 	if existTargets == 0 && pod.DeletionTimestamp == nil {
+		// Check if this is a DaemonSet pod - they should not be deleted when they have no refs
+		// DaemonSet pods are managed by the DaemonSet controller
+		if isDaemonSetPod(pod) {
+			// Skip DaemonSet pods - they're managed by the DaemonSet controller
+			// No need to log or return error, just skip processing
+			return nil
+		}
+		
 		var shouldDelay bool
 		shouldDelay, err := resource.ShouldDelay(ctx, pod, p.Client)
 		if err != nil {
