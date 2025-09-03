@@ -201,4 +201,3 @@ jobs:
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           text: ":rocket: JuiceFS CSI Driver ${{ needs.release.outputs.version }} images built and pushed to all ECR registries! :rocket:"
-
