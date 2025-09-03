@@ -192,7 +192,7 @@ jobs:
   #           ${{ steps.login-ecr.outputs.registry }}/juicefs-csi-dashboard-${{ matrix.region.identifier }}:latest
 
   notify:
-    needs: [release, build-csi, build-mount-images, build-dashboard]
+    needs: [release, build-csi]
     runs-on: ubuntu-latest
     if: always() && needs.build-csi.result == 'success' && needs.build-mount-images.result == 'success' && needs.build-dashboard.result == 'success'
     steps:
