@@ -22,7 +22,6 @@ COPY  cmd ./cmd
 COPY  pkg ./pkg
 COPY  go.mod .
 COPY  go.sum .
-COPY  .git .
 COPY Makefile .
 ENV GOPROXY=${GOPROXY:-https://proxy.golang.org}
 RUN make
