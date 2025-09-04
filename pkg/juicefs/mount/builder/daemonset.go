@@ -149,37 +149,97 @@ func (d *DaemonSetBuilder) ensureDaemonSetTolerations() {
 	}
 	
 	tolerations := d.jfsSetting.Attr.Tolerations
+	
+	// Check for existing tolerations to avoid duplicates
+	hasTolerationAll := false
 	hasNotReadyToleration := false
 	hasUnreachableToleration := false
-	tolerationSeconds := int64(43200) // 12 hours
+	hasDiskPressureToleration := false
+	hasMemoryPressureToleration := false
+	hasPidPressureToleration := false
+	hasUnschedulableToleration := false
+	hasNetworkUnavailableToleration := false
 	
-	// Check and update existing tolerations
 	for i := range tolerations {
+		if tolerations[i].Operator == corev1.TolerationOpExists && tolerations[i].Key == "" {
+			hasTolerationAll = true
+		}
 		if tolerations[i].Key == "node.kubernetes.io/not-ready" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
-			tolerations[i].TolerationSeconds = &tolerationSeconds
 			hasNotReadyToleration = true
 		}
 		if tolerations[i].Key == "node.kubernetes.io/unreachable" && tolerations[i].Effect == corev1.TaintEffectNoExecute {
-			tolerations[i].TolerationSeconds = &tolerationSeconds
 			hasUnreachableToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/disk-pressure" && tolerations[i].Effect == corev1.TaintEffectNoSchedule {
+			hasDiskPressureToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/memory-pressure" && tolerations[i].Effect == corev1.TaintEffectNoSchedule {
+			hasMemoryPressureToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/pid-pressure" && tolerations[i].Effect == corev1.TaintEffectNoSchedule {
+			hasPidPressureToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/unschedulable" && tolerations[i].Effect == corev1.TaintEffectNoSchedule {
+			hasUnschedulableToleration = true
+		}
+		if tolerations[i].Key == "node.kubernetes.io/network-unavailable" && tolerations[i].Effect == corev1.TaintEffectNoSchedule {
+			hasNetworkUnavailableToleration = true
 		}
 	}
 	
 	// Add missing tolerations
+	if !hasTolerationAll {
+		tolerations = append(tolerations, corev1.Toleration{
+			Operator: corev1.TolerationOpExists,
+		})
+	}
 	if !hasNotReadyToleration {
 		tolerations = append(tolerations, corev1.Toleration{
-			Key:               "node.kubernetes.io/not-ready",
-			Operator:          corev1.TolerationOpExists,
-			Effect:            corev1.TaintEffectNoExecute,
-			TolerationSeconds: &tolerationSeconds,
+			Key:      "node.kubernetes.io/not-ready",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoExecute,
 		})
 	}
 	if !hasUnreachableToleration {
 		tolerations = append(tolerations, corev1.Toleration{
-			Key:               "node.kubernetes.io/unreachable",
-			Operator:          corev1.TolerationOpExists,
-			Effect:            corev1.TaintEffectNoExecute,
-			TolerationSeconds: &tolerationSeconds,
+			Key:      "node.kubernetes.io/unreachable",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoExecute,
+		})
+	}
+	if !hasDiskPressureToleration {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      "node.kubernetes.io/disk-pressure",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+	if !hasMemoryPressureToleration {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      "node.kubernetes.io/memory-pressure",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+	if !hasPidPressureToleration {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      "node.kubernetes.io/pid-pressure",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+	if !hasUnschedulableToleration {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      "node.kubernetes.io/unschedulable",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+	if !hasNetworkUnavailableToleration {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      "node.kubernetes.io/network-unavailable",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
 		})
 	}
 	
